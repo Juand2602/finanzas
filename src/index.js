@@ -28,7 +28,9 @@ for (const key of REQUIRED_ENV) {
 // Inicialización del bot
 // ---------------------------------------------------------------------------
 
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
+const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, {
+  polling: { interval: 2000, autoStart: true },
+});
 
 registerCommands(bot);
 registerMessageHandler(bot);

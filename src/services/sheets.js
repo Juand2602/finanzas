@@ -11,21 +11,21 @@ const SHEETS = {
   OBLIGACIONES: 'Obligaciones',
 };
 
-function getAuth() {
+let _sheetsClient = null;
+
+function getSheetsClient() {
+  if (_sheetsClient) return _sheetsClient;
   const raw = process.env.GOOGLE_PRIVATE_KEY || '';
-  // Soporta tanto base64 (Railway) como formato con \n (dotenv local)
   const key = raw.includes('-----BEGIN')
     ? raw.replace(/\\n/g, '\n')
     : Buffer.from(raw, 'base64').toString('utf8');
-  return new google.auth.JWT({
+  const auth = new google.auth.JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     key,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-}
-
-function getSheetsClient() {
-  return google.sheets({ version: 'v4', auth: getAuth() });
+  _sheetsClient = google.sheets({ version: 'v4', auth });
+  return _sheetsClient;
 }
 
 /**
