@@ -49,11 +49,7 @@ function estaPermitido(username) {
 // ---------------------------------------------------------------------------
 
 function hoy() {
-  const d    = new Date();
-  const yyyy = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
 function mesActual() {
@@ -61,14 +57,11 @@ function mesActual() {
 }
 
 function inicioSemana() {
-  const d   = new Date();
+  const d = new Date(new Date().toLocaleString('en-CA', { timeZone: 'America/Bogota' }));
   const dia = d.getDay();
   const diff = dia === 0 ? -6 : 1 - dia;
   d.setDate(d.getDate() + diff);
-  const yyyy = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
 function inicioMes() {

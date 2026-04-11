@@ -29,15 +29,7 @@ const {
 // ---------------------------------------------------------------------------
 
 function hoy() {
-  const d = new Date();
-  return fmtFecha(d);
-}
-
-function fmtFecha(d) {
-  const yyyy = d.getFullYear();
-  const mm   = String(d.getMonth() + 1).padStart(2, '0');
-  const dd   = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
 function mesActual() {
@@ -46,11 +38,11 @@ function mesActual() {
 
 /** Lunes de la semana actual como YYYY-MM-DD. */
 function inicioSemana() {
-  const d = new Date();
+  const d = new Date(new Date().toLocaleString('en-CA', { timeZone: 'America/Bogota' }));
   const dia = d.getDay(); // 0=dom
   const diff = dia === 0 ? -6 : 1 - dia;
   d.setDate(d.getDate() + diff);
-  return fmtFecha(d);
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
 /** Primer día del mes actual como YYYY-MM-DD. */
