@@ -28,6 +28,12 @@ const {
 // Helpers de fecha
 // ---------------------------------------------------------------------------
 
+const MESES_ES = {
+  enero: '01', febrero: '02', marzo: '03', abril: '04',
+  mayo: '05', junio: '06', julio: '07', agosto: '08',
+  septiembre: '09', octubre: '10', noviembre: '11', diciembre: '12',
+};
+
 function hoy() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
@@ -43,6 +49,45 @@ function inicioSemana() {
   const diff = dia === 0 ? -6 : 1 - dia;
   d.setDate(d.getDate() + diff);
   return d.toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+}
+
+/**
+ * Devuelve { inicio, fin, label } para el mes YYYY-MM indicado.
+ */
+function rangoMes(mes) {
+  const [y, m] = mes.split('-').map(Number);
+  const ultimo = new Date(y, m, 0).getDate();
+  return {
+    inicio: `${mes}-01`,
+    fin:    `${mes}-${String(ultimo).padStart(2, '0')}`,
+    label:  mes,
+  };
+}
+
+/**
+ * Extrae el mes del texto del comando, ej: "/mes abril" → "2026-04".
+ * Si no se especifica, devuelve el mes actual.
+ */
+function parsearMesParam(msg) {
+  const texto = (msg.text || '').toLowerCase().trim();
+  // Quitar la parte del comando (/mes, /disponible, etc.)
+  const partes = texto.split(/\s+/);
+  if (partes.length < 2) return mesActual();
+
+  const param = partes.slice(1).join(' ').trim();
+
+  // Formato ISO: 2026-04
+  if (/^\d{4}-\d{2}$/.test(param)) return param;
+
+  // Nombre de mes en español
+  for (const [nombre, num] of Object.entries(MESES_ES)) {
+    if (param.includes(nombre)) {
+      const anio = mesActual().slice(0, 4);
+      return `${anio}-${num}`;
+    }
+  }
+
+  return mesActual();
 }
 
 /** Primer día del mes actual como YYYY-MM-DD. */
@@ -261,13 +306,14 @@ async function cmdResumen(bot, msg) {
 }
 
 async function cmdMes(bot, msg) {
-  const usuario = msg.from.username;
-  const chatId  = msg.chat.id;
-  const mes     = mesActual();
+  const usuario        = msg.from.username;
+  const chatId         = msg.chat.id;
+  const mes            = parsearMesParam(msg);
+  const { inicio, fin } = rangoMes(mes);
 
   try {
     const [txs, obls] = await Promise.all([
-      getTransacciones(inicioMes(), finMes(), usuario),
+      getTransacciones(inicio, fin, usuario),
       getObligaciones(usuario, mes),
     ]);
 
@@ -279,13 +325,14 @@ async function cmdMes(bot, msg) {
 }
 
 async function cmdDisponible(bot, msg) {
-  const usuario = msg.from.username;
-  const chatId  = msg.chat.id;
-  const mes     = mesActual();
+  const usuario        = msg.from.username;
+  const chatId         = msg.chat.id;
+  const mes            = parsearMesParam(msg);
+  const { inicio, fin } = rangoMes(mes);
 
   try {
     const [txs, obls] = await Promise.all([
-      getTransacciones(inicioMes(), finMes(), usuario),
+      getTransacciones(inicio, fin, usuario),
       getObligaciones(usuario, mes),
     ]);
     await send(bot, chatId, resumenDisponible(txs, obls, usuario, mes));
@@ -311,7 +358,7 @@ async function cmdDeudas(bot, msg) {
 async function cmdObligaciones(bot, msg) {
   const usuario = msg.from.username;
   const chatId  = msg.chat.id;
-  const mes     = mesActual();
+  const mes     = parsearMesParam(msg);
 
   try {
     const obls = await getObligaciones(usuario, mes);
@@ -325,7 +372,7 @@ async function cmdObligaciones(bot, msg) {
 async function cmdPresupuestos(bot, msg) {
   const usuario = msg.from.username;
   const chatId  = msg.chat.id;
-  const mes     = mesActual();
+  const mes     = parsearMesParam(msg);
 
   try {
     const conGastado = await getGastadoPorCategoria(usuario, mes);
@@ -361,9 +408,11 @@ async function cmdTransacciones(bot, msg, filtro) {
     hasta = hoy();
     periodoLabel = 'esta semana';
   } else {
-    desde = inicioMes();
-    hasta = finMes();
-    periodoLabel = mesActual();
+    const mes            = parsearMesParam(msg);
+    const { inicio, fin } = rangoMes(mes);
+    desde        = inicio;
+    hasta        = fin;
+    periodoLabel = mes;
   }
 
   // Determinar tipo a mostrar
@@ -506,19 +555,21 @@ const COMANDOS_TEXTO = `📋 Comandos disponibles:
 /resumen — resumen general del mes
 /hoy — movimientos de hoy
 /semana — resumen semanal
-/mes — resumen mensual
-/disponible — balance real disponible
+/mes [mes?] — resumen mensual
+/disponible [mes?] — balance real disponible
 /deudas — deudas pendientes
-/obligaciones — obligaciones del mes
-/presupuestos — estado de presupuestos
-/transacciones — todas las del mes
-/transacciones_egresos — solo egresos
-/transacciones_ingresos — solo ingresos
+/obligaciones [mes?] — obligaciones del mes
+/presupuestos [mes?] — estado de presupuestos
+/transacciones [mes?] — todas las del mes
+/transacciones_egresos [mes?] — solo egresos
+/transacciones_ingresos [mes?] — solo ingresos
 /transacciones_semana — de esta semana
 /transacciones_hoy — de hoy
 /categorias — ver categorías y palabras clave
 /comandos — ver esta lista
-/ayuda — ejemplos de mensajes`;
+/ayuda — ejemplos de mensajes
+
+Ejemplo: /mes abril  /disponible marzo`;
 
 async function cmdAyuda(bot, msg) {
   const texto = `📖 *Estructura de mensajes*
