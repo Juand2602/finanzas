@@ -545,49 +545,59 @@ Categorias:
 Ejemplos:
 • Gaste 20000 comida almuerzo
 • Recibi 500000 trabajo quincena
-• Me deben pedro 50000 almuerzo
-• Le debo maria 80000 mercado
+• Me deben andres 50000 almuerzo
+• Le debo juan 80000 mercado
 • Obligacion arriendo 800000 dia 5
 • Pague arriendo`;
 
 const COMANDOS_TEXTO = `📋 Comandos disponibles:
 
+── Resúmenes ──
 /resumen — resumen general del mes
 /hoy — movimientos de hoy
 /semana — resumen semanal
 /mes [mes?] — resumen mensual
 /disponible [mes?] — balance real disponible
+
+── Deudas y obligaciones ──
 /deudas — deudas pendientes
 /obligaciones [mes?] — obligaciones del mes
+
+── Presupuestos ──
 /presupuestos [mes?] — estado de presupuestos
+
+── Transacciones ──
 /transacciones [mes?] — todas las del mes
 /transacciones_egresos [mes?] — solo egresos
 /transacciones_ingresos [mes?] — solo ingresos
 /transacciones_semana — de esta semana
 /transacciones_hoy — de hoy
-/categorias — ver categorías y palabras clave
-/comandos — ver esta lista
-/ayuda — ejemplos de mensajes
 
-Ejemplo: /mes abril  /disponible marzo`;
+── Ayuda ──
+/categorias — categorías disponibles
+/ayuda — guía de mensajes
+/comandos — ver esta lista
+
+Los comandos con [mes?] aceptan un mes opcional.
+Ejemplo: /mes abril   /disponible marzo`;
 
 async function cmdAyuda(bot, msg) {
   const chatId = msg.chat.id;
   const SEP = '──────────────────';
 
-  await send(bot, chatId, `📖 *Ayuda — Bot de Finanzas*\n_Toca cualquier ejemplo para copiarlo_\n${SEP}`);
+  await send(bot, chatId, `📖 *Ayuda — Bot de Finanzas*\n_Toca un ejemplo para copiarlo_\n${SEP}`);
 
-  await send(bot, chatId, `💸 *EGRESOS E INGRESOS*\n${SEP}\n\`gaste 20000 comida almuerzo\`\n\`gaste 50000 transporte taxi semana\`\n\`recibi 500000 trabajo quincena\`\n\`recibi 20000 otros venta\``);
+  await send(bot, chatId, `💸 *EGRESOS E INGRESOS*\n${SEP}\n\`gaste 20000 comida almuerzo\`\n\`recibi 500000 trabajo quincena\``);
 
-  await send(bot, chatId, `💬 *DEUDAS*\n${SEP}\n📥 Registrar que te deben:\n\`medeben pedro 50000 almuerzo\`\n\n📤 Registrar que debés:\n\`ledebo maria 80000 mercado\`\n\n✅ Marcar deuda cobrada:\n\`mepagaron pedro\`\n\`mepagaron pedro 50000\`\n\n💰 Registrar abono parcial:\n\`abono pedro 10000\``);
+  await send(bot, chatId, `💬 *DEUDAS*\n${SEP}\n📥 Te deben:  \`medeben pedro 50000\`\n📤 Debés:     \`ledebo maria 80000\`\n✅ Cobrada:   \`mepagaron pedro\`\n💰 Abono:     \`abono pedro 10000\``);
 
-  await send(bot, chatId, `🔒 *OBLIGACIONES*\n${SEP}\nRegistrar obligación mensual:\n\`obligacion arriendo 800000 dia 5\`\n\`obligacion tarjeta 200000 dia 15\`\n\nMarcar como pagada:\n\`pague arriendo\`\n\`pague tarjeta\``);
+  await send(bot, chatId, `🔒 *OBLIGACIONES*\n${SEP}\nRegistrar:  \`obligacion arriendo 800000 dia 5\`\nPagar:      \`pague arriendo\``);
 
-  await send(bot, chatId, `🎯 *PRESUPUESTOS*\n${SEP}\nDefinir presupuesto mensual:\n\`presupuesto comida 300000\`\n\`presupuesto transporte 150000\`\n\`presupuesto comida 300000 mayo\``);
+  await send(bot, chatId, `🎯 *PRESUPUESTOS*\n${SEP}\n\`presupuesto comida 300000\`\n\`presupuesto comida 300000 mayo\``);
 
   await send(bot, chatId, `📊 *CONSULTAS EN TEXTO*\n${SEP}\n\`hoy\`\n\`resumen semanal\`\n\`resumen del mes\`\n\`disponible este mes\`\n\`mis deudas\`\n\`mis obligaciones\`\n\`mis presupuestos\``);
 
-  await send(bot, chatId, `🗂️ *CATEGORÍAS*\n${SEP}\n🍔 \`comida\`  🚌 \`transporte\`  🔌 \`servicios\`  💊 \`salud\`\n🎮 \`ocio\`  👕 \`personal\`  💼 \`trabajo\`  📦 \`otros\``);
+  await send(bot, chatId, `🗂️ *CATEGORÍAS*\n${SEP}\n🍔 \`comida\`  \n🚌 \`transporte\`  \n🔌 \`servicios\`  \n💊 \`salud\`\n🎮 \`ocio\`  \n👕 \`personal\`  \n💼 \`trabajo\`  \n📦 \`otros\``);
 
   await send(bot, chatId, COMANDOS_TEXTO, null);
 }
