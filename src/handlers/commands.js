@@ -572,52 +572,24 @@ const COMANDOS_TEXTO = `📋 Comandos disponibles:
 Ejemplo: /mes abril  /disponible marzo`;
 
 async function cmdAyuda(bot, msg) {
-  const texto = `📖 *Estructura de mensajes*
-_palabra\\_clave + monto + categoría + descripción_
-──────────────────
+  const chatId = msg.chat.id;
+  const SEP = '──────────────────';
 
-💸 *Egreso*
-\`gaste 20000 comida almuerzo\`
+  await send(bot, chatId, `📖 *Ayuda — Bot de Finanzas*\n_Toca cualquier ejemplo para copiarlo_\n${SEP}`);
 
-💰 *Ingreso*
-\`recibi 500000 trabajo quincena abril\`
+  await send(bot, chatId, `💸 *EGRESOS E INGRESOS*\n${SEP}\n\`gaste 20000 comida almuerzo\`\n\`gaste 50000 transporte taxi semana\`\n\`recibi 500000 trabajo quincena\`\n\`recibi 20000 otros venta\``);
 
-📥 *Me deben*
-\`medeben pedro 50000 almuerzo\`
+  await send(bot, chatId, `💬 *DEUDAS*\n${SEP}\n📥 Registrar que te deben:\n\`medeben pedro 50000 almuerzo\`\n\n📤 Registrar que debés:\n\`ledebo maria 80000 mercado\`\n\n✅ Marcar deuda cobrada:\n\`mepagaron pedro\`\n\`mepagaron pedro 50000\`\n\n💰 Registrar abono parcial:\n\`abono pedro 10000\``);
 
-📤 *Le debo*
-\`ledebo maria 80000 mercado\`
+  await send(bot, chatId, `🔒 *OBLIGACIONES*\n${SEP}\nRegistrar obligación mensual:\n\`obligacion arriendo 800000 dia 5\`\n\`obligacion tarjeta 200000 dia 15\`\n\nMarcar como pagada:\n\`pague arriendo\`\n\`pague tarjeta\``);
 
-✅ *Me pagaron deuda*
-\`mepagaron pedro\`
-\`mepagaron pedro 50000\`
+  await send(bot, chatId, `🎯 *PRESUPUESTOS*\n${SEP}\nDefinir presupuesto mensual:\n\`presupuesto comida 300000\`\n\`presupuesto transporte 150000\`\n\`presupuesto comida 300000 mayo\``);
 
-💰 *Abono de deuda*
-\`abono pedro 10000\`
+  await send(bot, chatId, `📊 *CONSULTAS EN TEXTO*\n${SEP}\n\`hoy\`\n\`resumen semanal\`\n\`resumen del mes\`\n\`disponible este mes\`\n\`mis deudas\`\n\`mis obligaciones\`\n\`mis presupuestos\``);
 
-🔒 *Registrar obligación*
-\`obligacion arriendo 800000 dia 5\`
+  await send(bot, chatId, `🗂️ *CATEGORÍAS*\n${SEP}\n🍔 \`comida\`  🚌 \`transporte\`  🔌 \`servicios\`  💊 \`salud\`\n🎮 \`ocio\`  👕 \`personal\`  💼 \`trabajo\`  📦 \`otros\``);
 
-✅ *Pagar obligación*
-\`pague arriendo\`
-
-🎯 *Presupuesto*
-\`presupuesto comida 300000\`
-\`presupuesto transporte 150000 abril\`
-
-📊 *Consultas*
-• \`resumen semanal\`
-• \`resumen del mes\`
-• \`mis deudas\`
-• \`mis obligaciones\`
-• \`disponible este mes\`
-• \`mis presupuestos\`
-
-_Categorías: comida · transporte · servicios · salud · ocio · personal · trabajo · otros_`;
-
-  await send(bot, msg.chat.id, texto);
-  await send(bot, msg.chat.id, ESTRUCTURA_TEXTO, null);
-  await send(bot, msg.chat.id, COMANDOS_TEXTO, null);
+  await send(bot, chatId, COMANDOS_TEXTO, null);
 }
 
 module.exports = { registerCommands };
