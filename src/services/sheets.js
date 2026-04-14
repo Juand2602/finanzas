@@ -10,6 +10,7 @@ const SHEETS = {
   PRESUPUESTOS: 'Presupuestos',
   OBLIGACIONES: 'Obligaciones',
   AHORROS: 'Ahorros',
+  MOVIMIENTOS_AHORRO: 'MovimientosAhorro',
 };
 
 let _sheetsClient = null;
@@ -459,6 +460,45 @@ async function depositarAhorro(rowIndex, montoDeposito, meta, acumuladoPrev) {
   }
 }
 
+/**
+ * Registra un movimiento individual de ahorro en el historial.
+ * @param {{ fecha, usuario, nombre, monto }} data
+ */
+async function appendMovimientoAhorro(data) {
+  try {
+    const { fecha, usuario, nombre, monto } = data;
+    await appendRow(SHEETS.MOVIMIENTOS_AHORRO, [fecha, usuario, nombre, monto]);
+  } catch (err) {
+    throw new Error(`appendMovimientoAhorro: ${err.message}`);
+  }
+}
+
+/**
+ * Retorna el historial de depósitos de un usuario para una meta específica.
+ * @param {string} usuario
+ * @param {string} nombre  Nombre de la meta (búsqueda parcial, case-insensitive)
+ * @returns {Array<{ fecha, usuario, nombre, monto }>}
+ */
+async function getMovimientosAhorro(usuario, nombre) {
+  try {
+    const rows = await getRows(SHEETS.MOVIMIENTOS_AHORRO, 'A2:D');
+    const nombreNorm = nombre.toLowerCase();
+    return rows
+      .map((r) => ({
+        fecha:   r[0] || '',
+        usuario: r[1] || '',
+        nombre:  r[2] || '',
+        monto:   parseInt(r[3], 10) || 0,
+      }))
+      .filter((m) =>
+        m.usuario === usuario &&
+        m.nombre.toLowerCase().includes(nombreNorm),
+      );
+  } catch (err) {
+    throw new Error(`getMovimientosAhorro: ${err.message}`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 
 module.exports = {
@@ -483,4 +523,6 @@ module.exports = {
   upsertAhorro,
   getAhorros,
   depositarAhorro,
+  appendMovimientoAhorro,
+  getMovimientosAhorro,
 };

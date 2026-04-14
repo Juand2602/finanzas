@@ -7,6 +7,7 @@ const {
   getPresupuestos,
   getGastadoPorCategoria,
   getAhorros,
+  getMovimientosAhorro,
 } = require('../services/sheets');
 
 const {
@@ -24,6 +25,7 @@ const {
   resumenPresupuestos,
   resumenObligaciones,
   resumenAhorros,
+  resumenHistorialAhorro,
 } = require('../services/reports');
 
 // ---------------------------------------------------------------------------
@@ -64,6 +66,24 @@ function rangoMes(mes) {
     fin:    `${mes}-${String(ultimo).padStart(2, '0')}`,
     label:  mes,
   };
+}
+
+/**
+ * Devuelve el parámetro crudo después del comando (lo que va después del primer token).
+ * Ej: "/ahorros vacaciones" → "vacaciones"
+ */
+function paramCrudo(msg) {
+  const partes = (msg.text || '').trim().split(/\s+/);
+  return partes.length >= 2 ? partes.slice(1).join(' ').toLowerCase().trim() : '';
+}
+
+/**
+ * Devuelve true si el parámetro es un mes reconocible (nombre o ISO YYYY-MM).
+ */
+function esMes(param) {
+  if (!param) return false;
+  if (/^\d{4}-\d{2}$/.test(param)) return true;
+  return Object.keys(MESES_ES).some((nombre) => param.includes(nombre));
 }
 
 /**
@@ -499,9 +519,27 @@ async function cmdTransacciones(bot, msg, filtro) {
 async function cmdAhorros(bot, msg) {
   const usuario = msg.from.username;
   const chatId  = msg.chat.id;
-  const mes     = parsearMesParam(msg);
+  const param   = paramCrudo(msg);
 
   try {
+    // Si el parámetro es un nombre de meta → mostrar historial
+    if (param && !esMes(param)) {
+      const mes     = mesActual();
+      const ahorros = await getAhorros(usuario, mes);
+      const match   = ahorros.find((a) => a.nombre.toLowerCase().includes(param));
+
+      if (!match) {
+        await send(bot, chatId, `⚠️ No encontré una meta de ahorro con ese nombre.\nUsá /ahorros para ver tus metas.`);
+        return;
+      }
+
+      const movimientos = await getMovimientosAhorro(usuario, match.nombre);
+      await send(bot, chatId, resumenHistorialAhorro(match, movimientos, usuario));
+      return;
+    }
+
+    // Si es un mes o no hay parámetro → mostrar resumen general
+    const mes     = parsearMesParam(msg);
     const ahorros = await getAhorros(usuario, mes);
     await send(bot, chatId, resumenAhorros(ahorros, usuario));
   } catch (err) {
@@ -613,7 +651,7 @@ async function cmdAyuda(bot, msg) {
 
   await send(bot, chatId, `🎯 *PRESUPUESTOS*\n${SEP}\n\`Presupuesto comida 300000\`\n\`Presupuesto comida 300000 mayo\``);
 
-  await send(bot, chatId, `💰 *AHORROS*\n${SEP}\nDefinir meta:    \`ahorro vacaciones 500000\`\nAgregar dinero:  \`ahorre vacaciones 50000\``);
+  await send(bot, chatId, `💰 *AHORROS*\n${SEP}\nDefinir meta:    \`ahorro vacaciones 500000\`\nAgregar dinero:  \`ahorre vacaciones 50000\`\nVer historial:   /ahorros vacaciones`);
 
   await send(bot, chatId, `📊 *CONSULTAS EN TEXTO*\n${SEP}\n\`hoy\`\n\`resumen semanal\`\n\`resumen del mes\`\n\`disponible este mes\`\n\`mis deudas\`\n\`mis obligaciones\`\n\`mis presupuestos\`\n\`mis ahorros\``);
 

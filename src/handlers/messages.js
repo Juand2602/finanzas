@@ -16,6 +16,7 @@ const {
   upsertAhorro,
   getAhorros,
   depositarAhorro,
+  appendMovimientoAhorro,
 }                                     = require('../services/sheets');
 const {
   generarGraficoBarras,
@@ -399,6 +400,8 @@ async function handleAhorro(bot, chatId, parsed) {
       const { nuevoAcumulado, completado } = await depositarAhorro(
         match.rowIndex, monto, match.meta, match.acumulado,
       );
+
+      await appendMovimientoAhorro({ fecha: hoy(), usuario, nombre: match.nombre, monto });
 
       if (completado) {
         await send(bot, chatId,

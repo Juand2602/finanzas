@@ -461,6 +461,44 @@ function resumenAhorros(ahorros, usuario) {
   return lineas.join('\n');
 }
 
+/**
+ * Historial de depósitos de una meta de ahorro específica.
+ * @param {object}   ahorro      Objeto de la meta { nombre, meta, acumulado, porcentaje }
+ * @param {object[]} movimientos Lista de depósitos { fecha, monto }
+ * @param {string}   usuario
+ * @returns {string}
+ */
+function resumenHistorialAhorro(ahorro, movimientos, usuario) {
+  const { porcentaje } = ahorro;
+  const icono = porcentaje >= 100 ? '🎉'
+    : porcentaje >= 60 ? '✅'
+    : porcentaje >= 30 ? '📈'
+    : '🪙';
+
+  const lineas = [
+    encabezado(`💰 *Ahorro — ${esc(ahorro.nombre)}*`, usuario),
+    '',
+    `${icono} ${barraProgreso(porcentaje)}`,
+    `   ${fmt(ahorro.acumulado)} de ${fmt(ahorro.meta)}`,
+    '',
+    SEP,
+    `📋 *Depósitos (${movimientos.length})*`,
+    '',
+  ];
+
+  if (!movimientos.length) {
+    lineas.push('_Sin depósitos registrados._');
+  } else {
+    movimientos.forEach((m) => {
+      lineas.push(`📅 ${m.fecha}  💰 *${fmt(m.monto)}*`);
+    });
+    const total = movimientos.reduce((s, m) => s + m.monto, 0);
+    lineas.push('', SEP, `Total depositado: *${fmt(total)}*`);
+  }
+
+  return lineas.join('\n');
+}
+
 // ---------------------------------------------------------------------------
 
 module.exports = {
@@ -472,4 +510,5 @@ module.exports = {
   resumenPresupuestos,
   resumenObligaciones,
   resumenAhorros,
+  resumenHistorialAhorro,
 };
