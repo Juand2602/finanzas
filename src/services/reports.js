@@ -418,6 +418,49 @@ function resumenObligaciones(obligaciones, usuario) {
   return lineas.join('\n');
 }
 
+/**
+ * Estado de metas de ahorro con barra de progreso.
+ * @param {Array<{ nombre, meta, acumulado, porcentaje }>} ahorros
+ * @param {string} usuario
+ * @returns {string}
+ */
+function resumenAhorros(ahorros, usuario) {
+  const lineas = [
+    encabezado('💰 *Ahorros*', usuario),
+    '',
+  ];
+
+  if (!ahorros.length) {
+    lineas.push('_Sin metas de ahorro definidas._');
+    return lineas.join('\n');
+  }
+
+  const totalMeta      = ahorros.reduce((s, a) => s + a.meta, 0);
+  const totalAcumulado = ahorros.reduce((s, a) => s + a.acumulado, 0);
+
+  ahorros.forEach((a) => {
+    const { porcentaje } = a;
+    const icono = porcentaje >= 100 ? '🎉'
+      : porcentaje >= 60 ? '✅'
+      : porcentaje >= 30 ? '📈'
+      : '🪙';
+
+    lineas.push(
+      `${icono} *${esc(a.nombre)}*`,
+      `   ${barraProgreso(porcentaje)}`,
+      `   ${fmt(a.acumulado)} de ${fmt(a.meta)}`,
+      '',
+    );
+  });
+
+  lineas.push(
+    SEP,
+    `💰 Total ahorrado: *${fmt(totalAcumulado)}* de *${fmt(totalMeta)}*`,
+  );
+
+  return lineas.join('\n');
+}
+
 // ---------------------------------------------------------------------------
 
 module.exports = {
@@ -428,4 +471,5 @@ module.exports = {
   resumenDeudas,
   resumenPresupuestos,
   resumenObligaciones,
+  resumenAhorros,
 };

@@ -6,6 +6,7 @@ const {
   getObligaciones,
   getPresupuestos,
   getGastadoPorCategoria,
+  getAhorros,
 } = require('../services/sheets');
 
 const {
@@ -22,6 +23,7 @@ const {
   resumenDeudas,
   resumenPresupuestos,
   resumenObligaciones,
+  resumenAhorros,
 } = require('../services/reports');
 
 // ---------------------------------------------------------------------------
@@ -158,6 +160,7 @@ function registerCommands(bot) {
   bot.onText(/\/transacciones_semana/,   (msg) => cmdTransacciones(bot, msg, 'semana'));
   bot.onText(/\/transacciones_hoy/,      (msg) => cmdTransacciones(bot, msg, 'hoy'));
   bot.onText(/\/transacciones(?!_)/,     (msg) => cmdTransacciones(bot, msg, 'mes'));
+  bot.onText(/\/ahorros/,    (msg) => cmdAhorros(bot, msg));
   bot.onText(/\/categorias/, (msg) => cmdCategorias(bot, msg));
   bot.onText(/\/comandos/,   (msg) => cmdComandos(bot, msg));
   bot.onText(/\/ayuda/, (msg) => cmdAyuda(bot, msg));
@@ -493,6 +496,20 @@ async function cmdTransacciones(bot, msg, filtro) {
   }
 }
 
+async function cmdAhorros(bot, msg) {
+  const usuario = msg.from.username;
+  const chatId  = msg.chat.id;
+  const mes     = parsearMesParam(msg);
+
+  try {
+    const ahorros = await getAhorros(usuario, mes);
+    await send(bot, chatId, resumenAhorros(ahorros, usuario));
+  } catch (err) {
+    console.error('[cmdAhorros]', err.message);
+    await send(bot, chatId, '❌ Error al obtener los ahorros.');
+  }
+}
+
 async function cmdCategorias(bot, msg) {
   const texto = `🗂️ *Categorías disponibles*
 _Escríbela exactamente así en tus mensajes_
@@ -563,8 +580,9 @@ const COMANDOS_TEXTO = `📋 Comandos disponibles:
 /deudas — deudas pendientes
 /obligaciones [mes?] — obligaciones del mes
 
-── Presupuestos ──
+── Presupuestos y ahorros ──
 /presupuestos [mes?] — estado de presupuestos
+/ahorros [mes?] — metas de ahorro
 
 ── Transacciones ──
 /transacciones [mes?] — todas las del mes
@@ -587,17 +605,19 @@ async function cmdAyuda(bot, msg) {
 
   await send(bot, chatId, `📖 *Ayuda — Bot de Finanzas*\n_Toca un ejemplo para copiarlo_\n${SEP}`);
 
-  await send(bot, chatId, `💸 *EGRESOS E INGRESOS*\n${SEP}\n\`gaste 20000 comida almuerzo\`\n\`recibi 500000 trabajo quincena\``);
+  await send(bot, chatId, `💸 *EGRESOS E INGRESOS*\n${SEP}\n\`Gaste 20000 comida almuerzo\`\n\`Recibi 500000 trabajo quincena\``);
 
-  await send(bot, chatId, `💬 *DEUDAS*\n${SEP}\n📥 Te deben:  \`medeben pedro 50000\`\n📤 Debés:     \`ledebo maria 80000\`\n✅ Cobrada:   \`mepagaron pedro\`\n💰 Abono:     \`abono pedro 10000\``);
+  await send(bot, chatId, `💬 *DEUDAS*\n${SEP}\n📥 Te deben:  \`Me deben andres 50000\`\n📤 Debés:     \`Le debo juan 80000\`\n✅ Cobrada:   \`Me pagaron andres\`\n💰 Abono:     \`Abono andres 10000\``);
 
-  await send(bot, chatId, `🔒 *OBLIGACIONES*\n${SEP}\nRegistrar:  \`obligacion arriendo 800000 dia 5\`\nPagar:      \`pague arriendo\``);
+  await send(bot, chatId, `🔒 *OBLIGACIONES*\n${SEP}\nRegistrar:  \`Obligacion arriendo 800000 dia 5\`\nPagar:      \`Pague arriendo\``);
 
-  await send(bot, chatId, `🎯 *PRESUPUESTOS*\n${SEP}\n\`presupuesto comida 300000\`\n\`presupuesto comida 300000 mayo\``);
+  await send(bot, chatId, `🎯 *PRESUPUESTOS*\n${SEP}\n\`Presupuesto comida 300000\`\n\`Presupuesto comida 300000 mayo\``);
 
-  await send(bot, chatId, `📊 *CONSULTAS EN TEXTO*\n${SEP}\n\`hoy\`\n\`resumen semanal\`\n\`resumen del mes\`\n\`disponible este mes\`\n\`mis deudas\`\n\`mis obligaciones\`\n\`mis presupuestos\``);
+  await send(bot, chatId, `💰 *AHORROS*\n${SEP}\nDefinir meta:    \`ahorro vacaciones 500000\`\nAgregar dinero:  \`ahorre vacaciones 50000\``);
 
-  await send(bot, chatId, `🗂️ *CATEGORÍAS*\n${SEP}\n🍔 \`comida\`  \n🚌 \`transporte\`  \n🔌 \`servicios\`  \n💊 \`salud\`\n🎮 \`ocio\`  \n👕 \`personal\`  \n💼 \`trabajo\`  \n📦 \`otros\``);
+  await send(bot, chatId, `📊 *CONSULTAS EN TEXTO*\n${SEP}\n\`hoy\`\n\`resumen semanal\`\n\`resumen del mes\`\n\`disponible este mes\`\n\`mis deudas\`\n\`mis obligaciones\`\n\`mis presupuestos\`\n\`mis ahorros\``);
+
+  await send(bot, chatId, `🗂️ *CATEGORÍAS*\n${SEP}\n🍔 \`Comida\`  \n🚌 \`Transporte\`  \n🔌 \`Servicios\`  \n💊 \`Salud\`\n🎮 \`Ocio\`  \n👕 \`Personal\`  \n💼 \`Trabajo\`  \n📦 \`Otros\``);
 
   await send(bot, chatId, COMANDOS_TEXTO, null);
 }

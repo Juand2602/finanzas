@@ -240,6 +240,33 @@ function tryObligacionPagar(norm, original) {
   });
 }
 
+// AHORRO META: ahorro [nombre] [meta] [mes?]
+function tryAhorroMeta(norm) {
+  const m = norm.match(/^ahorro\s+(\S+)\s+(\d[\d.,]*)(?:\s+(.+))?$/);
+  if (!m) return null;
+  const mesRaw = m[3] ? parsearMes(m[3]) : null;
+  return resultado('ahorro', {
+    monto:       extraerMonto(m[2]),
+    subtipo:     'meta',
+    descripcion: m[1].trim(),
+    mes:         mesRaw || mesActual(),
+    categoria:   'Otros',
+  });
+}
+
+// AHORRO DEPÓSITO: ahorre [nombre] [monto]
+function tryAhorroDeposito(norm) {
+  const m = norm.match(/^ahorre\s+(\S+)\s+(\d[\d.,]*).*$/);
+  if (!m) return null;
+  return resultado('ahorro', {
+    monto:       extraerMonto(m[2]),
+    subtipo:     'deposito',
+    descripcion: m[1].trim(),
+    mes:         mesActual(),
+    categoria:   'Otros',
+  });
+}
+
 // PRESUPUESTO: presupuesto [categoria] [monto] [mes?]
 function tryPresupuesto(norm) {
   const m = norm.match(/^presupuesto\s+(\S+)\s+(\d[\d.,]*)(?:\s+(.+))?$/);
@@ -265,6 +292,7 @@ function tryConsulta(norm) {
     { patron: /mis\s+deudas|ver\s+deudas/,                            subtipo: 'deudas'       },
     { patron: /obligaciones\s+pendientes|mis\s+obligaciones/,         subtipo: 'obligaciones' },
     { patron: /como\s+voy\s+con\s+el\s+presupuesto|mis\s+presupuestos/, subtipo: 'presupuestos' },
+    { patron: /mis\s+ahorros|ver\s+ahorros/,                            subtipo: 'ahorros'      },
   ];
   for (const { patron, subtipo } of consultas) {
     if (patron.test(norm)) {
@@ -316,6 +344,8 @@ function parseMessage(text, username) {
     tryObligacionRegistrar(norm, text) ||
     tryObligacionPagar(norm, text) ||
     tryPresupuesto(norm) ||
+    tryAhorroMeta(norm) ||
+    tryAhorroDeposito(norm) ||
     tryMeDeben(norm, text) ||
     tryLeDebo(norm, text) ||
     tryMePago(norm, text) ||

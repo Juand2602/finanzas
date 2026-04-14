@@ -9,6 +9,7 @@ const SHEETS = {
   DEUDAS: 'Deudas',
   PRESUPUESTOS: 'Presupuestos',
   OBLIGACIONES: 'Obligaciones',
+  AHORROS: 'Ahorros',
 };
 
 let _sheetsClient = null;
@@ -379,6 +380,86 @@ async function getTotalObligacionesPendientes(usuario, mes) {
 }
 
 // ---------------------------------------------------------------------------
+// AHORROS
+// ---------------------------------------------------------------------------
+
+/**
+ * Crea o actualiza una meta de ahorro.
+ * Columnas: A=usuario B=nombre C=meta D=acumulado E=mes
+ * @param {string} usuario
+ * @param {string} nombre
+ * @param {number} meta
+ * @param {string} mes  YYYY-MM
+ */
+async function upsertAhorro(usuario, nombre, meta, mes) {
+  try {
+    const rows = await getRows(SHEETS.AHORROS, 'A2:E');
+    const idx  = rows.findIndex(
+      (r) => r[0] === usuario &&
+             (r[1] || '').toLowerCase() === nombre.toLowerCase() &&
+             r[4] === mes,
+    );
+    if (idx !== -1) {
+      const rowIndex   = idx + 2;
+      const acumulado  = parseInt(rows[idx][3], 10) || 0;
+      await updateRow(SHEETS.AHORROS, rowIndex, 'A', [usuario, nombre, meta, acumulado, mes]);
+    } else {
+      await appendRow(SHEETS.AHORROS, [usuario, nombre, meta, 0, mes]);
+    }
+  } catch (err) {
+    throw new Error(`upsertAhorro: ${err.message}`);
+  }
+}
+
+/**
+ * Retorna las metas de ahorro de un usuario para un mes dado.
+ * @param {string} usuario
+ * @param {string} mes  YYYY-MM
+ * @returns {Array<{ rowIndex, usuario, nombre, meta, acumulado, mes, porcentaje }>}
+ */
+async function getAhorros(usuario, mes) {
+  try {
+    const rows = await getRows(SHEETS.AHORROS, 'A2:E');
+    return rows
+      .map((r, i) => {
+        const meta      = parseInt(r[2], 10) || 0;
+        const acumulado = parseInt(r[3], 10) || 0;
+        return {
+          rowIndex:   i + 2,
+          usuario:    r[0] || '',
+          nombre:     r[1] || '',
+          meta,
+          acumulado,
+          mes:        r[4] || '',
+          porcentaje: meta > 0 ? Math.min(Math.round((acumulado / meta) * 100), 100) : 0,
+        };
+      })
+      .filter((a) => a.usuario === usuario && a.mes === mes);
+  } catch (err) {
+    throw new Error(`getAhorros: ${err.message}`);
+  }
+}
+
+/**
+ * Agrega un depósito a una meta de ahorro (columna D).
+ * @param {number} rowIndex
+ * @param {number} montoDeposito
+ * @param {number} meta          Monto objetivo
+ * @param {number} acumuladoPrev Lo que ya estaba ahorrado
+ * @returns {{ nuevoAcumulado, completado }}
+ */
+async function depositarAhorro(rowIndex, montoDeposito, meta, acumuladoPrev) {
+  try {
+    const nuevoAcumulado = acumuladoPrev + montoDeposito;
+    const completado     = nuevoAcumulado >= meta;
+    await updateRow(SHEETS.AHORROS, rowIndex, 'D', [nuevoAcumulado]);
+    return { nuevoAcumulado, completado };
+  } catch (err) {
+    throw new Error(`depositarAhorro: ${err.message}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 module.exports = {
   // Transacciones
@@ -398,4 +479,8 @@ module.exports = {
   getObligaciones,
   marcarObligacionPagada,
   getTotalObligacionesPendientes,
+  // Ahorros
+  upsertAhorro,
+  getAhorros,
+  depositarAhorro,
 };

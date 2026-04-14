@@ -13,6 +13,9 @@ const {
   getTransacciones,
   getDeudas,
   getObligaciones,
+  upsertAhorro,
+  getAhorros,
+  depositarAhorro,
 }                                     = require('../services/sheets');
 const {
   generarGraficoBarras,
@@ -27,6 +30,7 @@ const {
   resumenDeudas,
   resumenPresupuestos,
   resumenObligaciones,
+  resumenAhorros,
 }                                     = require('../services/reports');
 
 // ---------------------------------------------------------------------------
@@ -357,12 +361,59 @@ async function handleConsulta(bot, chatId, parsed) {
         break;
       }
 
+      case 'ahorros': {
+        const ahorros = await getAhorros(usuario, mes);
+        await send(bot, chatId, resumenAhorros(ahorros, usuario));
+        break;
+      }
+
       default:
         await send(bot, chatId, '🤔 No entendí qué consulta querés hacer. Probá con /ayuda.');
     }
   } catch (err) {
     console.error('[handleConsulta]', err.message);
     await send(bot, chatId, '❌ Error al generar el reporte. Intenta de nuevo.');
+  }
+}
+
+async function handleAhorro(bot, chatId, parsed) {
+  const { monto, subtipo, descripcion, mes, usuario } = parsed;
+
+  if (subtipo === 'meta') {
+    await upsertAhorro(usuario, descripcion, monto, mes || mesActual());
+    await send(bot, chatId, `💰 Meta de ahorro definida · *${descripcion}* · *${fmt(monto)}*`);
+    return;
+  }
+
+  if (subtipo === 'deposito') {
+    try {
+      const ahorros    = await getAhorros(usuario, mes || mesActual());
+      const nombreNorm = descripcion.toLowerCase();
+      const match      = ahorros.find((a) => a.nombre.toLowerCase().includes(nombreNorm));
+
+      if (!match) {
+        await send(bot, chatId, `⚠️ No encontré una meta de ahorro con ese nombre.\nUsá /ahorros para ver tus metas.`);
+        return;
+      }
+
+      const { nuevoAcumulado, completado } = await depositarAhorro(
+        match.rowIndex, monto, match.meta, match.acumulado,
+      );
+
+      if (completado) {
+        await send(bot, chatId,
+          `🎉 *¡Meta alcanzada!* · *${match.nombre}*\n` +
+          `💰 Total ahorrado: *${fmt(nuevoAcumulado)}* de *${fmt(match.meta)}*`);
+      } else {
+        const porcentaje = Math.round((nuevoAcumulado / match.meta) * 100);
+        await send(bot, chatId,
+          `💰 Ahorro registrado · *${match.nombre}* · *${fmt(monto)}*\n` +
+          `📊 Acumulado: *${fmt(nuevoAcumulado)}* de *${fmt(match.meta)}* *(${porcentaje}%)*`);
+      }
+    } catch (err) {
+      console.error('[handleAhorro deposito]', err.message);
+      await send(bot, chatId, '❌ Error al registrar el ahorro.');
+    }
   }
 }
 
@@ -414,6 +465,9 @@ function registerMessageHandler(bot) {
           break;
         case 'presupuesto':
           await handlePresupuesto(bot, chatId, parsed);
+          break;
+        case 'ahorro':
+          await handleAhorro(bot, chatId, parsed);
           break;
         case 'consulta':
           await handleConsulta(bot, chatId, parsed);
