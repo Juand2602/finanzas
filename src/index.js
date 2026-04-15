@@ -15,6 +15,7 @@ const REQUIRED_ENV = [
   'GOOGLE_SHEET_ID',
   'GOOGLE_SERVICE_ACCOUNT_EMAIL',
   'GOOGLE_PRIVATE_KEY',
+  'WEBHOOK_URL',
 ];
 
 for (const key of REQUIRED_ENV) {
@@ -25,27 +26,30 @@ for (const key of REQUIRED_ENV) {
 }
 
 // ---------------------------------------------------------------------------
-// Inicialización del bot
+// Inicialización del bot con webhook
 // ---------------------------------------------------------------------------
 
-const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, {
-  polling: { interval: 2000, autoStart: true },
+const PORT       = process.env.PORT || 3000;
+const token      = process.env.TELEGRAM_TOKEN;
+const webhookUrl = process.env.WEBHOOK_URL.replace(/\/$/, ''); // quitar trailing slash
+
+const bot = new TelegramBot(token, {
+  webHook: { port: PORT },
 });
+
+bot.setWebHook(`${webhookUrl}/bot${token}`)
+  .then(() => console.log(`✅ Bot de finanzas iniciado. Webhook: ${webhookUrl}/bot${token}`))
+  .catch((err) => {
+    console.error('[webhook] Error al configurar webhook:', err.message);
+    process.exit(1);
+  });
 
 registerCommands(bot);
 registerMessageHandler(bot);
 
-console.log('✅ Bot de finanzas iniciado con polling.');
-
 // ---------------------------------------------------------------------------
 // Manejo de errores globales
 // ---------------------------------------------------------------------------
-
-bot.on('polling_error', (err) => {
-  // EFATAL/AggregateError es un error transitorio de DNS en sistemas IPv4+IPv6, no es fatal
-  if (err.code === 'EFATAL') return;
-  console.error('[polling_error]', err.code, err.message);
-});
 
 bot.on('error', (err) => {
   console.error('[bot_error]', err.message);

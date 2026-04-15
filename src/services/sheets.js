@@ -1,33 +1,38 @@
 'use strict';
 
-const { google } = require('googleapis');
+const { JWT } = require('google-auth-library');
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
+const BASE_URL = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
 
 const SHEETS = {
-  TRANSACCIONES: 'Transacciones',
-  DEUDAS: 'Deudas',
-  PRESUPUESTOS: 'Presupuestos',
-  OBLIGACIONES: 'Obligaciones',
-  AHORROS: 'Ahorros',
+  TRANSACCIONES:      'Transacciones',
+  DEUDAS:             'Deudas',
+  PRESUPUESTOS:       'Presupuestos',
+  OBLIGACIONES:       'Obligaciones',
+  AHORROS:            'Ahorros',
   MOVIMIENTOS_AHORRO: 'MovimientosAhorro',
 };
 
-let _sheetsClient = null;
+let _authClient = null;
 
-function getSheetsClient() {
-  if (_sheetsClient) return _sheetsClient;
+function getAuthClient() {
+  if (_authClient) return _authClient;
   const raw = process.env.GOOGLE_PRIVATE_KEY || '';
   const key = raw.includes('-----BEGIN')
     ? raw.replace(/\\n/g, '\n')
     : Buffer.from(raw, 'base64').toString('utf8');
-  const auth = new google.auth.JWT({
+  _authClient = new JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     key,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  _sheetsClient = google.sheets({ version: 'v4', auth });
-  return _sheetsClient;
+  return _authClient;
+}
+
+async function getAccessToken() {
+  const { token } = await getAuthClient().getAccessToken();
+  return token;
 }
 
 /**
@@ -35,50 +40,55 @@ function getSheetsClient() {
  * Retorna [] si la hoja está vacía.
  */
 async function getRows(sheetName, range) {
-  const sheets = getSheetsClient();
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!${range}`,
+  const token   = await getAccessToken();
+  const encoded = encodeURIComponent(`${sheetName}!${range}`);
+  const res     = await fetch(`${BASE_URL}/values/${encoded}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-  return res.data.values || [];
+  if (!res.ok) throw new Error(`getRows HTTP ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.values || [];
 }
 
 /**
  * Agrega una fila al final de la hoja indicada.
  */
 async function appendRow(sheetName, values) {
-  const sheets = getSheetsClient();
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A1`,
-    valueInputOption: 'USER_ENTERED',
-    insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: [values] },
-  });
+  const token   = await getAccessToken();
+  const encoded = encodeURIComponent(`${sheetName}!A1`);
+  const res     = await fetch(
+    `${BASE_URL}/values/${encoded}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ values: [values] }),
+    },
+  );
+  if (!res.ok) throw new Error(`appendRow HTTP ${res.status}: ${await res.text()}`);
 }
 
 /**
  * Actualiza una celda o rango en una fila específica (1-indexed).
  */
 async function updateRow(sheetName, rowIndex, colStart, values) {
-  const sheets = getSheetsClient();
+  const token  = await getAccessToken();
   const colEnd = String.fromCharCode(colStart.charCodeAt(0) + values.length - 1);
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!${colStart}${rowIndex}:${colEnd}${rowIndex}`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [values] },
-  });
+  const range  = `${sheetName}!${colStart}${rowIndex}:${colEnd}${rowIndex}`;
+  const res    = await fetch(
+    `${BASE_URL}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    {
+      method:  'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ values: [values] }),
+    },
+  );
+  if (!res.ok) throw new Error(`updateRow HTTP ${res.status}: ${await res.text()}`);
 }
 
 // ---------------------------------------------------------------------------
 // TRANSACCIONES
 // ---------------------------------------------------------------------------
 
-/**
- * Agrega una transacción.
- * @param {{ fecha, usuario, tipo, monto, categoria, descripcion }} data
- */
 async function appendTransaccion(data) {
   try {
     const { fecha, usuario, tipo, monto, categoria, descripcion } = data;
@@ -88,28 +98,21 @@ async function appendTransaccion(data) {
   }
 }
 
-/**
- * Retorna transacciones filtradas por rango de fechas y opcionalmente por usuario.
- * @param {string} fechaInicio  YYYY-MM-DD
- * @param {string} fechaFin     YYYY-MM-DD
- * @param {string} [usuario]
- * @returns {Array<{ rowIndex, fecha, usuario, tipo, monto, categoria, descripcion }>}
- */
 async function getTransacciones(fechaInicio, fechaFin, usuario) {
   try {
     const rows = await getRows(SHEETS.TRANSACCIONES, 'A2:F');
     return rows
       .map((r, i) => ({
-        rowIndex: i + 2, // fila real en la hoja (con encabezado en fila 1)
-        fecha: r[0] || '',
-        usuario: r[1] || '',
-        tipo: r[2] || '',
-        monto: parseInt(r[3], 10) || 0,
-        categoria: r[4] || '',
+        rowIndex:    i + 2,
+        fecha:       r[0] || '',
+        usuario:     r[1] || '',
+        tipo:        r[2] || '',
+        monto:       parseInt(r[3], 10) || 0,
+        categoria:   r[4] || '',
         descripcion: r[5] || '',
       }))
       .filter((t) => {
-        const dentroDeRango = t.fecha >= fechaInicio && t.fecha <= fechaFin;
+        const dentroDeRango   = t.fecha >= fechaInicio && t.fecha <= fechaFin;
         const coincideUsuario = !usuario || t.usuario === usuario;
         return dentroDeRango && coincideUsuario;
       });
@@ -122,10 +125,6 @@ async function getTransacciones(fechaInicio, fechaFin, usuario) {
 // DEUDAS
 // ---------------------------------------------------------------------------
 
-/**
- * Agrega una deuda.
- * @param {{ fecha, usuario, direccion, monto, persona, descripcion, estado }} data
- */
 async function appendDeuda(data) {
   try {
     const { fecha, usuario, direccion, monto, persona, descripcion, estado = 'pendiente' } = data;
@@ -135,13 +134,6 @@ async function appendDeuda(data) {
   }
 }
 
-/**
- * Retorna deudas filtradas opcionalmente por usuario y/o estado.
- * Lee hasta columna H (Abonado).
- * @param {string} [usuario]
- * @param {string} [estado]  "pendiente" | "pagada"
- * @returns {Array<{ rowIndex, fecha, usuario, direccion, monto, persona, descripcion, estado, abonado, saldo }>}
- */
 async function getDeudas(usuario, estado) {
   try {
     const rows = await getRows(SHEETS.DEUDAS, 'A2:H');
@@ -172,10 +164,6 @@ async function getDeudas(usuario, estado) {
   }
 }
 
-/**
- * Marca una deuda como pagada actualizando la columna G de la fila indicada.
- * @param {number} rowIndex
- */
 async function marcarDeudaPagada(rowIndex) {
   try {
     await updateRow(SHEETS.DEUDAS, rowIndex, 'G', ['pagada']);
@@ -184,23 +172,13 @@ async function marcarDeudaPagada(rowIndex) {
   }
 }
 
-/**
- * Registra un abono parcial en una deuda (columna H).
- * Si el acumulado >= monto total, la marca automáticamente como pagada.
- * @param {number} rowIndex
- * @param {number} montoAbono
- * @param {number} montoTotal   Monto original de la deuda
- * @param {number} abonadoPrev  Lo que ya estaba abonado antes
- * @returns {{ nuevoAbonado, saldo, pagadaCompleta }}
- */
 async function registrarAbono(rowIndex, montoAbono, montoTotal, abonadoPrev) {
   try {
-    const nuevoAbonado = abonadoPrev + montoAbono;
-    const saldo        = montoTotal - nuevoAbonado;
+    const nuevoAbonado   = abonadoPrev + montoAbono;
+    const saldo          = montoTotal - nuevoAbonado;
     const pagadaCompleta = nuevoAbonado >= montoTotal;
 
     if (pagadaCompleta) {
-      // Actualiza abonado y estado en una sola llamada (G y H)
       await updateRow(SHEETS.DEUDAS, rowIndex, 'G', ['pagada', nuevoAbonado]);
     } else {
       await updateRow(SHEETS.DEUDAS, rowIndex, 'H', [nuevoAbonado]);
@@ -216,23 +194,15 @@ async function registrarAbono(rowIndex, montoAbono, montoTotal, abonadoPrev) {
 // PRESUPUESTOS
 // ---------------------------------------------------------------------------
 
-/**
- * Crea o actualiza el presupuesto de un usuario para una categoría y mes.
- * @param {string} usuario
- * @param {string} categoria
- * @param {number} monto
- * @param {string} mes  YYYY-MM
- */
 async function upsertPresupuesto(usuario, categoria, monto, mes) {
   try {
-    const rows = await getRows(SHEETS.PRESUPUESTOS, 'A2:D');
+    const rows          = await getRows(SHEETS.PRESUPUESTOS, 'A2:D');
     const existingIndex = rows.findIndex(
-      (r) => r[0] === usuario && r[1] === categoria && r[3] === mes
+      (r) => r[0] === usuario && r[1] === categoria && r[3] === mes,
     );
 
     if (existingIndex !== -1) {
-      const rowIndex = existingIndex + 2;
-      await updateRow(SHEETS.PRESUPUESTOS, rowIndex, 'A', [usuario, categoria, monto, mes]);
+      await updateRow(SHEETS.PRESUPUESTOS, existingIndex + 2, 'A', [usuario, categoria, monto, mes]);
     } else {
       await appendRow(SHEETS.PRESUPUESTOS, [usuario, categoria, monto, mes]);
     }
@@ -241,22 +211,16 @@ async function upsertPresupuesto(usuario, categoria, monto, mes) {
   }
 }
 
-/**
- * Retorna todos los presupuestos de un usuario para un mes dado.
- * @param {string} usuario
- * @param {string} mes  YYYY-MM
- * @returns {Array<{ rowIndex, usuario, categoria, monto, mes }>}
- */
 async function getPresupuestos(usuario, mes) {
   try {
     const rows = await getRows(SHEETS.PRESUPUESTOS, 'A2:D');
     return rows
       .map((r, i) => ({
-        rowIndex: i + 2,
-        usuario: r[0] || '',
+        rowIndex:  i + 2,
+        usuario:   r[0] || '',
         categoria: r[1] || '',
-        monto: parseInt(r[2], 10) || 0,
-        mes: r[3] || '',
+        monto:     parseInt(r[2], 10) || 0,
+        mes:       r[3] || '',
       }))
       .filter((p) => p.usuario === usuario && p.mes === mes);
   } catch (err) {
@@ -264,44 +228,28 @@ async function getPresupuestos(usuario, mes) {
   }
 }
 
-/**
- * Cruza Transacciones con Presupuestos para el usuario y mes indicados.
- * @param {string} usuario
- * @param {string} mes  YYYY-MM  (ej: "2026-04")
- * @returns {Array<{ categoria, presupuesto, gastado, porcentaje, alerta }>}
- *          alerta es true si porcentaje >= 80
- */
 async function getGastadoPorCategoria(usuario, mes) {
   try {
     const fechaInicio = `${mes}-01`;
-    // Último día del mes calculado sin dependencias externas
     const [anio, mesNum] = mes.split('-').map(Number);
-    const ultimoDia = new Date(anio, mesNum, 0).getDate();
-    const fechaFin = `${mes}-${String(ultimoDia).padStart(2, '0')}`;
+    const ultimoDia   = new Date(anio, mesNum, 0).getDate();
+    const fechaFin    = `${mes}-${String(ultimoDia).padStart(2, '0')}`;
 
     const [presupuestos, transacciones] = await Promise.all([
       getPresupuestos(usuario, mes),
       getTransacciones(fechaInicio, fechaFin, usuario),
     ]);
 
-    const egresos = transacciones.filter((t) => t.tipo === 'egreso');
-
-    // Acumula gasto real por categoría
+    const egresos    = transacciones.filter((t) => t.tipo === 'egreso');
     const gastadoMap = {};
     for (const t of egresos) {
       gastadoMap[t.categoria] = (gastadoMap[t.categoria] || 0) + t.monto;
     }
 
     return presupuestos.map((p) => {
-      const gastado = gastadoMap[p.categoria] || 0;
+      const gastado    = gastadoMap[p.categoria] || 0;
       const porcentaje = p.monto > 0 ? Math.round((gastado / p.monto) * 100) : 0;
-      return {
-        categoria: p.categoria,
-        presupuesto: p.monto,
-        gastado,
-        porcentaje,
-        alerta: porcentaje >= 80,
-      };
+      return { categoria: p.categoria, presupuesto: p.monto, gastado, porcentaje, alerta: porcentaje >= 80 };
     });
   } catch (err) {
     throw new Error(`getGastadoPorCategoria: ${err.message}`);
@@ -312,10 +260,6 @@ async function getGastadoPorCategoria(usuario, mes) {
 // OBLIGACIONES
 // ---------------------------------------------------------------------------
 
-/**
- * Agrega una obligación mensual.
- * @param {{ usuario, nombre, tipo, monto, diaPago, estado, mes }} data
- */
 async function appendObligacion(data) {
   try {
     const { usuario, nombre, tipo, monto, diaPago, estado = 'pendiente', mes } = data;
@@ -325,25 +269,19 @@ async function appendObligacion(data) {
   }
 }
 
-/**
- * Retorna las obligaciones de un usuario para un mes dado.
- * @param {string} usuario
- * @param {string} mes  YYYY-MM
- * @returns {Array<{ rowIndex, usuario, nombre, tipo, monto, diaPago, estado, mes }>}
- */
 async function getObligaciones(usuario, mes) {
   try {
     const rows = await getRows(SHEETS.OBLIGACIONES, 'A2:G');
     return rows
       .map((r, i) => ({
         rowIndex: i + 2,
-        usuario: r[0] || '',
-        nombre: r[1] || '',
-        tipo: r[2] || '',
-        monto: parseInt(r[3], 10) || 0,
-        diaPago: parseInt(r[4], 10) || 0,
-        estado: r[5] || 'pendiente',
-        mes: r[6] || '',
+        usuario:  r[0] || '',
+        nombre:   r[1] || '',
+        tipo:     r[2] || '',
+        monto:    parseInt(r[3], 10) || 0,
+        diaPago:  parseInt(r[4], 10) || 0,
+        estado:   r[5] || 'pendiente',
+        mes:      r[6] || '',
       }))
       .filter((o) => o.usuario === usuario && o.mes === mes);
   } catch (err) {
@@ -351,10 +289,6 @@ async function getObligaciones(usuario, mes) {
   }
 }
 
-/**
- * Marca una obligación como pagada actualizando la columna F de la fila indicada.
- * @param {number} rowIndex  Número de fila real en la hoja (1-indexed)
- */
 async function marcarObligacionPagada(rowIndex) {
   try {
     await updateRow(SHEETS.OBLIGACIONES, rowIndex, 'F', ['pagada']);
@@ -363,12 +297,6 @@ async function marcarObligacionPagada(rowIndex) {
   }
 }
 
-/**
- * Suma los montos de las obligaciones pendientes de un usuario en un mes.
- * @param {string} usuario
- * @param {string} mes  YYYY-MM
- * @returns {number}
- */
 async function getTotalObligacionesPendientes(usuario, mes) {
   try {
     const obligaciones = await getObligaciones(usuario, mes);
@@ -384,14 +312,6 @@ async function getTotalObligacionesPendientes(usuario, mes) {
 // AHORROS
 // ---------------------------------------------------------------------------
 
-/**
- * Crea o actualiza una meta de ahorro.
- * Columnas: A=usuario B=nombre C=meta D=acumulado E=mes
- * @param {string} usuario
- * @param {string} nombre
- * @param {number} meta
- * @param {string} mes  YYYY-MM
- */
 async function upsertAhorro(usuario, nombre, meta, mes) {
   try {
     const rows = await getRows(SHEETS.AHORROS, 'A2:E');
@@ -401,9 +321,8 @@ async function upsertAhorro(usuario, nombre, meta, mes) {
              r[4] === mes,
     );
     if (idx !== -1) {
-      const rowIndex   = idx + 2;
-      const acumulado  = parseInt(rows[idx][3], 10) || 0;
-      await updateRow(SHEETS.AHORROS, rowIndex, 'A', [usuario, nombre, meta, acumulado, mes]);
+      const acumulado = parseInt(rows[idx][3], 10) || 0;
+      await updateRow(SHEETS.AHORROS, idx + 2, 'A', [usuario, nombre, meta, acumulado, mes]);
     } else {
       await appendRow(SHEETS.AHORROS, [usuario, nombre, meta, 0, mes]);
     }
@@ -412,12 +331,6 @@ async function upsertAhorro(usuario, nombre, meta, mes) {
   }
 }
 
-/**
- * Retorna las metas de ahorro de un usuario para un mes dado.
- * @param {string} usuario
- * @param {string} mes  YYYY-MM
- * @returns {Array<{ rowIndex, usuario, nombre, meta, acumulado, mes, porcentaje }>}
- */
 async function getAhorros(usuario, mes) {
   try {
     const rows = await getRows(SHEETS.AHORROS, 'A2:E');
@@ -441,14 +354,6 @@ async function getAhorros(usuario, mes) {
   }
 }
 
-/**
- * Agrega un depósito a una meta de ahorro (columna D).
- * @param {number} rowIndex
- * @param {number} montoDeposito
- * @param {number} meta          Monto objetivo
- * @param {number} acumuladoPrev Lo que ya estaba ahorrado
- * @returns {{ nuevoAcumulado, completado }}
- */
 async function depositarAhorro(rowIndex, montoDeposito, meta, acumuladoPrev) {
   try {
     const nuevoAcumulado = acumuladoPrev + montoDeposito;
@@ -460,10 +365,6 @@ async function depositarAhorro(rowIndex, montoDeposito, meta, acumuladoPrev) {
   }
 }
 
-/**
- * Registra un movimiento individual de ahorro en el historial.
- * @param {{ fecha, usuario, nombre, monto }} data
- */
 async function appendMovimientoAhorro(data) {
   try {
     const { fecha, usuario, nombre, monto } = data;
@@ -473,15 +374,9 @@ async function appendMovimientoAhorro(data) {
   }
 }
 
-/**
- * Retorna el historial de depósitos de un usuario para una meta específica.
- * @param {string} usuario
- * @param {string} nombre  Nombre de la meta (búsqueda parcial, case-insensitive)
- * @returns {Array<{ fecha, usuario, nombre, monto }>}
- */
 async function getMovimientosAhorro(usuario, nombre) {
   try {
-    const rows = await getRows(SHEETS.MOVIMIENTOS_AHORRO, 'A2:D');
+    const rows       = await getRows(SHEETS.MOVIMIENTOS_AHORRO, 'A2:D');
     const nombreNorm = nombre.toLowerCase();
     return rows
       .map((r) => ({
@@ -490,10 +385,7 @@ async function getMovimientosAhorro(usuario, nombre) {
         nombre:  r[2] || '',
         monto:   parseInt(r[3], 10) || 0,
       }))
-      .filter((m) =>
-        m.usuario === usuario &&
-        m.nombre.toLowerCase().includes(nombreNorm),
-      );
+      .filter((m) => m.usuario === usuario && m.nombre.toLowerCase().includes(nombreNorm));
   } catch (err) {
     throw new Error(`getMovimientosAhorro: ${err.message}`);
   }
@@ -502,24 +394,19 @@ async function getMovimientosAhorro(usuario, nombre) {
 // ---------------------------------------------------------------------------
 
 module.exports = {
-  // Transacciones
   appendTransaccion,
   getTransacciones,
-  // Deudas
   appendDeuda,
   getDeudas,
   marcarDeudaPagada,
   registrarAbono,
-  // Presupuestos
   upsertPresupuesto,
   getPresupuestos,
   getGastadoPorCategoria,
-  // Obligaciones
   appendObligacion,
   getObligaciones,
   marcarObligacionPagada,
   getTotalObligacionesPendientes,
-  // Ahorros
   upsertAhorro,
   getAhorros,
   depositarAhorro,
